@@ -1,4 +1,3 @@
-
 import FirecrawlApp from '@mendable/firecrawl-js';
 
 interface ScrapeResponse {
@@ -8,6 +7,9 @@ interface ScrapeResponse {
   status?: string;
   data?: any[];
   error?: string;
+  markdown?: string;
+  html?: string;
+  metadata?: any;
 }
 
 export class FirecrawlService {
@@ -27,26 +29,12 @@ export class FirecrawlService {
         url = 'https://' + url;
       }
       
-      const scrapeResult = await this.firecrawlApp.scrapeUrl(url, {
-        formats: formats as ('markdown' | 'html')[]
-      });
+      const scrapeResult = await this.firecrawlApp.scrapeUrl(url);
 
       console.log('Scrape result:', scrapeResult);
       
-      if (!scrapeResult.success) {
-        return {
-          success: false,
-          error: scrapeResult.error || 'Failed to scrape website'
-        };
-      }
 
-      return {
-        success: true,
-        completed: scrapeResult.completed,
-        total: scrapeResult.total,
-        status: scrapeResult.status,
-        data: scrapeResult.data
-      };
+      return scrapeResult;
     } catch (error) {
       console.error('Error during scraping:', error);
       return {

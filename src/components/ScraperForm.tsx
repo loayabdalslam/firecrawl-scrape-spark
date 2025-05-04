@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -8,13 +7,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FirecrawlService } from '@/utils/FirecrawlService';
-import { Loader } from 'lucide-react';
+import { Loader, Download, Code, Eye } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
 
 interface ScrapeResult {
   success: boolean;
   completed?: number;
   total?: number;
   data?: any[];
+  error?: string;
+  markdown?: string;
+  html?: string;
 }
 
 const ScraperForm = () => {
@@ -24,8 +29,9 @@ const ScraperForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [formats, setFormats] = useState<string[]>(['markdown']);
   const [progress, setProgress] = useState(0);
-  const [results, setResults] = useState<any | null>(null);
+  const [results, setResults] = useState<ScrapeResult | null>(null);
   const [activeTab, setActiveTab] = useState('markdown');
+  const [viewMode, setViewMode] = useState<'raw' | 'preview'>('preview');
 
   const toggleFormat = (format: string) => {
     if (formats.includes(format)) {
@@ -71,21 +77,61 @@ const ScraperForm = () => {
       
       setProgress(100);
       
+      console.log("Raw scrape result returned:", JSON.stringify(result, null, 2));
+      
       if (result.success) {
         toast({
           title: "Success",
-          description: `Successfully scraped ${result.completed} pages`,
+          description: `Successfully scraped content`,
         });
-        setResults(result);
         
-        // Set active tab to first available format in results
-        if (result.data && result.data.length > 0) {
+        console.log("Full result data:", result);
+        
+        // Handle the direct markdown/html content
+        if (!result.data && (result.markdown || result.html)) {
+          // Convert the response format to match our UI expectations
+          setResults({
+            ...result,
+            data: [{
+              markdown: result.markdown,
+              html: result.html
+            }]
+          });
+          
+          // Set active tab to available format
+          if (result.markdown) {
+            setActiveTab('markdown');
+          } else if (result.html) {
+            setActiveTab('html');
+          }
+        } else if (result.data && result.data.length > 0) {
+          // Handle original data array format
+          setResults(result);
+          
+          // Check if any content exists in the first result
           const firstPage = result.data[0];
+          if (!firstPage.markdown && !firstPage.html) {
+            toast({
+              title: "Warning",
+              description: "No content was found on the page",
+              variant: "destructive",
+            });
+            return;
+          }
+          
+          // Set active tab to first available format in results
           if (firstPage.markdown) {
             setActiveTab('markdown');
           } else if (firstPage.html) {
             setActiveTab('html');
           }
+        } else {
+          toast({
+            title: "Warning",
+            description: "No data was returned from the scrape",
+            variant: "destructive",
+          });
+          return;
         }
       } else {
         toast({
@@ -180,37 +226,112 @@ const ScraperForm = () => {
           <div className="mt-8 space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Results</h3>
-              <span className="text-sm text-gray-500">
-                {results.completed} pages scraped
-              </span>
+              <div className="flex items-center gap-2">
+                <div className="border border-gray-200 dark:border-gray-800 rounded-md overflow-hidden flex">
+                  <Button 
+                    variant={viewMode === 'raw' ? 'default' : 'ghost'} 
+                    size="sm"
+                    onClick={() => setViewMode('raw')}
+                    className="rounded-none"
+                  >
+                    <Code className="h-4 w-4 mr-1" />
+                    Raw
+                  </Button>
+                  <Button 
+                    variant={viewMode === 'preview' ? 'default' : 'ghost'} 
+                    size="sm"
+                    onClick={() => setViewMode('preview')}
+                    className="rounded-none"
+                  >
+                    <Eye className="h-4 w-4 mr-1" />
+                    Preview
+                  </Button>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    // Prepare download data
+                    const downloadData = results.data ? results.data : [{
+                      markdown: results.markdown,
+                      html: results.html
+                    }];
+                    
+                    const dataStr = JSON.stringify(downloadData, null, 2);
+                    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(dataBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `scraped-${new Date().toISOString()}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
+                >
+                  <Download className="h-4 w-4 mr-1" />
+                  Download
+                </Button>
+              </div>
             </div>
             
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="markdown" disabled={!results.data[0].markdown}>
+                <TabsTrigger 
+                  value="markdown" 
+                  disabled={!results.data[0]?.markdown}
+                >
                   Markdown
                 </TabsTrigger>
-                <TabsTrigger value="html" disabled={!results.data[0].html}>
+                <TabsTrigger 
+                  value="html" 
+                  disabled={!results.data[0]?.html}
+                >
                   HTML
                 </TabsTrigger>
               </TabsList>
               
               <TabsContent value="markdown" className="mt-4">
                 <div className="max-h-96 overflow-auto rounded border border-gray-200 dark:border-gray-800 p-4 bg-gray-50 dark:bg-gray-900">
-                  <pre className="whitespace-pre-wrap text-sm">
-                    {results.data[0].markdown || "No markdown content available"}
-                  </pre>
+                  {viewMode === 'raw' ? (
+                    <pre className="whitespace-pre-wrap text-sm">
+                      {results.data[0]?.markdown || "No markdown content available"}
+                    </pre>
+                  ) : (
+                    <div className="markdown-preview prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown
+                        rehypePlugins={[rehypeRaw, rehypeSanitize]}
+                      >
+                        {results.data[0]?.markdown || "No markdown content available"}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
               
               <TabsContent value="html" className="mt-4">
                 <div className="max-h-96 overflow-auto rounded border border-gray-200 dark:border-gray-800 p-4 bg-gray-50 dark:bg-gray-900">
-                  <pre className="whitespace-pre-wrap text-sm">
-                    {results.data[0].html || "No HTML content available"}
-                  </pre>
+                  {viewMode === 'raw' ? (
+                    <pre className="whitespace-pre-wrap text-sm">
+                      {results.data[0]?.html || "No HTML content available"}
+                    </pre>
+                  ) : (
+                    <div 
+                      className="html-preview" 
+                      dangerouslySetInnerHTML={{ 
+                        __html: results.data[0]?.html || "No HTML content available" 
+                      }} 
+                    />
+                  )}
                 </div>
               </TabsContent>
             </Tabs>
+          </div>
+        )}
+        
+        {results && results.error && (
+          <div className="mt-8 p-4 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+            <h3 className="text-lg font-semibold text-red-700 dark:text-red-400">Error</h3>
+            <p className="text-red-600 dark:text-red-300 mt-2">{results.error}</p>
           </div>
         )}
       </CardContent>

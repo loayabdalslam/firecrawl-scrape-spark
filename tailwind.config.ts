@@ -1,4 +1,3 @@
-
 import type { Config } from "tailwindcss";
 
 export default {
@@ -64,6 +63,31 @@ export default {
 					ring: 'hsl(var(--sidebar-ring))'
 				}
 			},
+			typography: {
+				DEFAULT: {
+					css: {
+						maxWidth: 'none',
+						a: {
+							color: 'hsl(var(--primary))',
+							textDecoration: 'none',
+							'&:hover': {
+								textDecoration: 'underline',
+							},
+						},
+						code: {
+							color: 'hsl(var(--primary))',
+							backgroundColor: 'hsl(var(--muted))',
+							padding: '0.2em 0.4em',
+							borderRadius: '3px',
+							fontWeight: '400',
+						},
+						'pre code': {
+							backgroundColor: 'transparent',
+							padding: 0,
+						},
+					},
+				},
+			},
 			borderRadius: {
 				lg: 'var(--radius)',
 				md: 'calc(var(--radius) - 2px)',
@@ -102,5 +126,5 @@ export default {
 			}
 		}
 	},
-	plugins: [require("tailwindcss-animate")],
+	plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
 } satisfies Config;
