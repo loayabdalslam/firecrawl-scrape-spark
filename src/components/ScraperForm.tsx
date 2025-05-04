@@ -1,4 +1,5 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,10 +8,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FirecrawlService } from '@/utils/FirecrawlService';
-import { Loader, Download, Code, Eye } from 'lucide-react';
+import { Loader, Download, Code, Eye, Key } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger 
+} from "@/components/ui/dialog";
 
 interface ScrapeResult {
   success: boolean;
@@ -25,13 +35,47 @@ interface ScrapeResult {
 const ScraperForm = () => {
   const { toast } = useToast();
   const [url, setUrl] = useState('');
-  const [apiKey, setApiKey] = useState('fc-16a3e7f140514247ba37f4c280fe8f58');
+  const [apiKey, setApiKey] = useState('');
+  const [isApiKeySaved, setIsApiKeySaved] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formats, setFormats] = useState<string[]>(['markdown']);
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<ScrapeResult | null>(null);
   const [activeTab, setActiveTab] = useState('markdown');
   const [viewMode, setViewMode] = useState<'raw' | 'preview'>('preview');
+  const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
+
+  // Check for saved API key on component mount
+  useEffect(() => {
+    const savedApiKey = FirecrawlService.getApiKey();
+    if (savedApiKey) {
+      setApiKey(savedApiKey);
+      setIsApiKeySaved(true);
+    } else {
+      // Show API key dialog if no key is saved
+      setApiKeyDialogOpen(true);
+    }
+  }, []);
+
+  const handleSaveApiKey = () => {
+    if (!apiKey.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid Firecrawl API key",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    FirecrawlService.saveApiKey(apiKey);
+    setIsApiKeySaved(true);
+    setApiKeyDialogOpen(false);
+    
+    toast({
+      title: "Success",
+      description: "API key saved successfully",
+    });
+  };
 
   const toggleFormat = (format: string) => {
     if (formats.includes(format)) {
@@ -59,6 +103,16 @@ const ScraperForm = () => {
         description: "Please select at least one format",
         variant: "destructive",
       });
+      return;
+    }
+
+    if (!apiKey) {
+      toast({
+        title: "Error",
+        description: "Please enter your Firecrawl API key",
+        variant: "destructive",
+      });
+      setApiKeyDialogOpen(true);
       return;
     }
 
@@ -152,190 +206,282 @@ const ScraperForm = () => {
     }
   };
 
+  const handleCopyToClipboard = (content: string) => {
+    navigator.clipboard.writeText(content)
+      .then(() => {
+        toast({
+          title: "Copied",
+          description: "Content copied to clipboard",
+        });
+      })
+      .catch(err => {
+        console.error('Failed to copy: ', err);
+        toast({
+          title: "Error",
+          description: "Failed to copy content",
+          variant: "destructive",
+        });
+      });
+  };
+
   return (
-    <Card className="shadow-lg">
-      <CardHeader>
-        <CardTitle>Web Scraper</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <label htmlFor="url" className="text-sm font-medium">
-              Website URL
-            </label>
-            <Input
-              id="url"
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://example.com"
-              className="w-full"
-              required
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Data Format</label>
-            <div className="flex flex-wrap gap-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="markdown"
-                  checked={formats.includes('markdown')}
-                  onCheckedChange={() => toggleFormat('markdown')}
-                />
-                <label htmlFor="markdown" className="text-sm cursor-pointer">Markdown</label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="html"
-                  checked={formats.includes('html')}
-                  onCheckedChange={() => toggleFormat('html')}
-                />
-                <label htmlFor="html" className="text-sm cursor-pointer">HTML</label>
-              </div>
-            </div>
-          </div>
-          
-          {isLoading && (
+    <>
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Web Scraper</span>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setApiKeyDialogOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <Key className="h-4 w-4" />
+              {isApiKeySaved ? "Change API Key" : "Set API Key"}
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span>Scraping in progress...</span>
-                <span>{progress}%</span>
-              </div>
-              <Progress value={progress} className="w-full" />
+              <label htmlFor="url" className="text-sm font-medium">
+                Website URL
+              </label>
+              <Input
+                id="url"
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://example.com"
+                className="w-full"
+                required
+              />
             </div>
-          )}
-          
-          <Button
-            type="submit"
-            disabled={isLoading}
-            className="w-full"
-          >
-            {isLoading ? (
-              <>
-                <Loader className="mr-2 h-4 w-4 animate-spin" />
-                Scraping...
-              </>
-            ) : (
-              'Scrape Website'
-            )}
-          </Button>
-        </form>
-        
-        {results && results.data && results.data.length > 0 && (
-          <div className="mt-8 space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Results</h3>
-              <div className="flex items-center gap-2">
-                <div className="border border-gray-200 dark:border-gray-800 rounded-md overflow-hidden flex">
-                  <Button 
-                    variant={viewMode === 'raw' ? 'default' : 'ghost'} 
-                    size="sm"
-                    onClick={() => setViewMode('raw')}
-                    className="rounded-none"
-                  >
-                    <Code className="h-4 w-4 mr-1" />
-                    Raw
-                  </Button>
-                  <Button 
-                    variant={viewMode === 'preview' ? 'default' : 'ghost'} 
-                    size="sm"
-                    onClick={() => setViewMode('preview')}
-                    className="rounded-none"
-                  >
-                    <Eye className="h-4 w-4 mr-1" />
-                    Preview
-                  </Button>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Data Format</label>
+              <div className="flex flex-wrap gap-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="markdown"
+                    checked={formats.includes('markdown')}
+                    onCheckedChange={() => toggleFormat('markdown')}
+                  />
+                  <label htmlFor="markdown" className="text-sm cursor-pointer">Markdown</label>
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    // Prepare download data
-                    const downloadData = results.data ? results.data : [{
-                      markdown: results.markdown,
-                      html: results.html
-                    }];
-                    
-                    const dataStr = JSON.stringify(downloadData, null, 2);
-                    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-                    const url = URL.createObjectURL(dataBlob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `scraped-${new Date().toISOString()}.json`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                  }}
-                >
-                  <Download className="h-4 w-4 mr-1" />
-                  Download
-                </Button>
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="html"
+                    checked={formats.includes('html')}
+                    onCheckedChange={() => toggleFormat('html')}
+                  />
+                  <label htmlFor="html" className="text-sm cursor-pointer">HTML</label>
+                </div>
               </div>
             </div>
             
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger 
-                  value="markdown" 
-                  disabled={!results.data[0]?.markdown}
-                >
-                  Markdown
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="html" 
-                  disabled={!results.data[0]?.html}
-                >
-                  HTML
-                </TabsTrigger>
-              </TabsList>
+            {isLoading && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span>Scraping in progress...</span>
+                  <span>{progress}%</span>
+                </div>
+                <Progress value={progress} className="w-full" />
+              </div>
+            )}
+            
+            <Button
+              type="submit"
+              disabled={isLoading || !isApiKeySaved}
+              className="w-full"
+            >
+              {isLoading ? (
+                <>
+                  <Loader className="mr-2 h-4 w-4 animate-spin" />
+                  Scraping...
+                </>
+              ) : (
+                'Scrape Website'
+              )}
+            </Button>
+          </form>
+          
+          {results && results.data && results.data.length > 0 && (
+            <div className="mt-8 space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Results</h3>
+                <div className="flex items-center gap-2">
+                  <div className="border border-gray-200 dark:border-gray-800 rounded-md overflow-hidden flex">
+                    <Button 
+                      variant={viewMode === 'raw' ? 'default' : 'ghost'} 
+                      size="sm"
+                      onClick={() => setViewMode('raw')}
+                      className="rounded-none"
+                    >
+                      <Code className="h-4 w-4 mr-1" />
+                      Raw
+                    </Button>
+                    <Button 
+                      variant={viewMode === 'preview' ? 'default' : 'ghost'} 
+                      size="sm"
+                      onClick={() => setViewMode('preview')}
+                      className="rounded-none"
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      Preview
+                    </Button>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      // Prepare download data
+                      const downloadData = results.data ? results.data : [{
+                        markdown: results.markdown,
+                        html: results.html
+                      }];
+                      
+                      const dataStr = JSON.stringify(downloadData, null, 2);
+                      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                      const url = URL.createObjectURL(dataBlob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `scraped-${new Date().toISOString()}.json`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                    }}
+                  >
+                    <Download className="h-4 w-4 mr-1" />
+                    Download
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const content = activeTab === 'markdown' 
+                        ? results.data[0]?.markdown 
+                        : results.data[0]?.html;
+                      if (content) {
+                        handleCopyToClipboard(content);
+                      }
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
               
-              <TabsContent value="markdown" className="mt-4">
-                <div className="max-h-96 overflow-auto rounded border border-gray-200 dark:border-gray-800 p-4 bg-gray-50 dark:bg-gray-900">
-                  {viewMode === 'raw' ? (
-                    <pre className="whitespace-pre-wrap text-sm">
-                      {results.data[0]?.markdown || "No markdown content available"}
-                    </pre>
-                  ) : (
-                    <div className="markdown-preview prose prose-sm dark:prose-invert max-w-none">
-                      <ReactMarkdown
-                        rehypePlugins={[rehypeRaw, rehypeSanitize]}
-                      >
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger 
+                    value="markdown" 
+                    disabled={!results.data[0]?.markdown}
+                  >
+                    Markdown
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="html" 
+                    disabled={!results.data[0]?.html}
+                  >
+                    HTML
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="markdown" className="mt-4">
+                  <div className="max-h-96 overflow-auto rounded border border-gray-200 dark:border-gray-800 p-4 bg-gray-50 dark:bg-gray-900">
+                    {viewMode === 'raw' ? (
+                      <pre className="whitespace-pre-wrap text-sm">
                         {results.data[0]?.markdown || "No markdown content available"}
-                      </ReactMarkdown>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="html" className="mt-4">
-                <div className="max-h-96 overflow-auto rounded border border-gray-200 dark:border-gray-800 p-4 bg-gray-50 dark:bg-gray-900">
-                  {viewMode === 'raw' ? (
-                    <pre className="whitespace-pre-wrap text-sm">
-                      {results.data[0]?.html || "No HTML content available"}
-                    </pre>
-                  ) : (
-                    <div 
-                      className="html-preview" 
-                      dangerouslySetInnerHTML={{ 
-                        __html: results.data[0]?.html || "No HTML content available" 
-                      }} 
-                    />
-                  )}
-                </div>
-              </TabsContent>
-            </Tabs>
+                      </pre>
+                    ) : (
+                      <div className="markdown-preview prose prose-sm dark:prose-invert max-w-none">
+                        <ReactMarkdown
+                          rehypePlugins={[rehypeRaw, rehypeSanitize]}
+                        >
+                          {results.data[0]?.markdown || "No markdown content available"}
+                        </ReactMarkdown>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="html" className="mt-4">
+                  <div className="max-h-96 overflow-auto rounded border border-gray-200 dark:border-gray-800 p-4 bg-gray-50 dark:bg-gray-900">
+                    {viewMode === 'raw' ? (
+                      <pre className="whitespace-pre-wrap text-sm">
+                        {results.data[0]?.html || "No HTML content available"}
+                      </pre>
+                    ) : (
+                      <div 
+                        className="html-preview" 
+                        dangerouslySetInnerHTML={{ 
+                          __html: results.data[0]?.html || "No HTML content available" 
+                        }} 
+                      />
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+          
+          {results && results.error && (
+            <div className="mt-8 p-4 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+              <h3 className="text-lg font-semibold text-red-700 dark:text-red-400">Error</h3>
+              <p className="text-red-600 dark:text-red-300 mt-2">{results.error}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={apiKeyDialogOpen} onOpenChange={setApiKeyDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Firecrawl API Key</DialogTitle>
+            <DialogDescription>
+              Enter your Firecrawl API key to use the scraper. You can get an API key by signing up at{" "}
+              <a 
+                href="https://firecrawl.dev" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary underline underline-offset-4"
+              >
+                firecrawl.dev
+              </a>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="apiKey" className="text-sm font-medium">
+                API Key
+              </label>
+              <Input
+                id="apiKey"
+                type="text"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="fc-your-firecrawl-api-key"
+                className="w-full"
+              />
+            </div>
           </div>
-        )}
-        
-        {results && results.error && (
-          <div className="mt-8 p-4 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
-            <h3 className="text-lg font-semibold text-red-700 dark:text-red-400">Error</h3>
-            <p className="text-red-600 dark:text-red-300 mt-2">{results.error}</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          <DialogFooter className="sm:justify-end">
+            <Button 
+              type="button" 
+              variant="secondary" 
+              onClick={() => setApiKeyDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveApiKey}>
+              Save API Key
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

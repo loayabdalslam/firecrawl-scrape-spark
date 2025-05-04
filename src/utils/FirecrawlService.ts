@@ -1,3 +1,4 @@
+
 import FirecrawlApp from '@mendable/firecrawl-js';
 
 interface ScrapeResponse {
@@ -14,9 +15,21 @@ interface ScrapeResponse {
 
 export class FirecrawlService {
   private firecrawlApp: any;
+  private static API_KEY_STORAGE_KEY = 'firecrawl_api_key';
 
   constructor(apiKey: string) {
     this.firecrawlApp = new FirecrawlApp({ apiKey });
+  }
+
+  static saveApiKey(apiKey: string): void {
+    if (apiKey) {
+      localStorage.setItem(this.API_KEY_STORAGE_KEY, apiKey);
+      console.log('API key saved successfully');
+    }
+  }
+
+  static getApiKey(): string | null {
+    return localStorage.getItem(this.API_KEY_STORAGE_KEY);
   }
 
   async scrapeWebsite(url: string, formats: string[]): Promise<ScrapeResponse> {
@@ -33,7 +46,6 @@ export class FirecrawlService {
 
       console.log('Scrape result:', scrapeResult);
       
-
       return scrapeResult;
     } catch (error) {
       console.error('Error during scraping:', error);
