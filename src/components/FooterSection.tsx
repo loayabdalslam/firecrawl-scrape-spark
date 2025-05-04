@@ -1,9 +1,6 @@
-
 import { Globe } from 'lucide-react';
-
 const FooterSection = () => {
-  return (
-    <footer className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-12 px-4">
+  return <footer className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-12 px-4">
       <div className="container mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="col-span-1 md:col-span-2">
@@ -11,7 +8,7 @@ const FooterSection = () => {
               <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
                 <Globe className="h-4 w-4 text-white" />
               </div>
-              <span className="text-xl font-bold">ScrapeWave</span>
+              <span className="text-xl font-bold">Ahym | Scrape me now</span>
             </div>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
               Extract valuable data from any website with our powerful scraping technology.
@@ -72,8 +69,6 @@ const FooterSection = () => {
           </div>
         </div>
       </div>
-    </footer>
-  );
+    </footer>;
 };
-
 export default FooterSection;
